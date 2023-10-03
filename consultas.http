@@ -8,10 +8,6 @@ GET http://localhost:1234/productos/
 GET http://localhost:1234/productos/3/
 
 ### Obtencion del precio de un producto
-GET http://localhost:1234/productos/:id/precio
-:id es el id del producto del que quieres obtener el precio.
-Por ejemplo, si quieres obtener el precio del producto con id 1, la solicitud sería:
-
 GET http://localhost:1234/productos/1/precio
 
 ### Obtencion del nombre de un producto
@@ -50,7 +46,7 @@ GET http://localhost:1234/usuarios/
 
 ### Obtención de un usuario específico
 
-GET http://localhost:1234/usuarios/3/
+GET http://localhost:1234/usuarios/3
 
 ### Obtencion del telefono de un usuario
 GET http://localhost:1234/usuarios/2/telefono

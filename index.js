@@ -1,6 +1,10 @@
 import { createRequire } from 'node:module'
 import express from 'express'
 
+import db from './db/connection.js'
+import Producto from './models/producto.js'
+import Usuario from './models/usuario.js'
+
 const require = createRequire(import.meta.url)
 const datos = require('./datos.json')
 
@@ -14,12 +18,11 @@ app.get('/', (req, res) => {
     res.status(200).send(html)
 })
 
-app.get('/productos/', (req, res) =>{
+app.get('/productos/', async (req, res) =>{
     try {
-        let allProducts = datos.productos
+        let allProducts = await Producto.findAll()
 
         res.status(200).json(allProducts)
-
     } catch (error) {
         res.status(204).json({'message': error})
     }
@@ -37,9 +40,9 @@ app.get('/productos/total', (req, res) => {
     }
 })
 
-app.get('/usuarios/', (req, res) =>{
+app.get('/usuarios/', async (req, res) =>{
     try {
-        let allUsers = datos.usuarios
+        let allUsers = await Usuario.findAll()
 
         res.status(200).json(allUsers)
 
@@ -48,10 +51,10 @@ app.get('/usuarios/', (req, res) =>{
     }
 })
 
-app.get('/productos/:id', (req, res) => {
+app.get('/productos/:id', async (req, res) => {
     try {
         let productoId = parseInt(req.params.id)
-        let productoEncontrado = datos.productos.find((producto) => producto.id === productoId)
+        let productoEncontrado = await Producto.findByPk(productoId)
 
         res.status(200).json(productoEncontrado)
 
@@ -92,10 +95,10 @@ app.get('/productos/:id/nombre', (req, res) => {
     }
 })
 
-app.get('/usuarios/:id', (req, res) => {
+app.get('/usuarios/:id', async (req, res) => {
     try {
         let usuarioId = parseInt(req.params.id)
-        let usuarioEncontrado = datos.usuarios.find((usuario) => usuario.id === usuarioId)
+        let usuarioEncontrado = await Usuario.findByPk(usuarioId)
 
         res.status(200).json(usuarioEncontrado)
 
@@ -144,10 +147,12 @@ app.post('/productos', (req, res) => {
             bodyTemp += chunk.toString()
         })
     
-        req.on('end', () => {
+        req.on('end', async () => {
             const data = JSON.parse(bodyTemp)
             req.body = data
-            datos.productos.push(req.body)
+            //datos.productos.push(req.body)
+            const productoAGuardar = new Producto(req.body)
+            await productoAGuardar.save()
         })
     
         res.status(201).json({'message': 'success'})
@@ -165,10 +170,12 @@ app.post('/usuarios', (req, res) => {
             bodyTemp += chunk.toString()
         })
     
-        req.on('end', () => {
+        req.on('end', async() => {
             const data = JSON.parse(bodyTemp)
             req.body = data
-            datos.usuarios.push(req.body)
+            //datos.usuarios.push(req.body)
+            const usuarioAGuardar = new Usuario(req.body)
+            await usuarioAGuardar.save()
         })
     
         res.status(201).json({'message': 'success'})
@@ -178,104 +185,89 @@ app.post('/usuarios', (req, res) => {
     }
 })
 
-app.patch('/productos/:id', (req, res) => {
+app.patch('/productos/:id', async (req, res) => {
     let idProductoAEditar = parseInt(req.params.id)
-    let productoAActualizar = datos.productos.find((producto) => producto.id === idProductoAEditar)
+    try {
+        let productoAActualizar = await Producto.findByPk(idProductoAEditar)
 
-    if (!productoAActualizar) {
+        if (!productoAActualizar) {
+            return res.status(204).json({'message':'Producto no encontrado'})}
+
+        let bodyTemp = ''
+
+        req.on('data', (chunk) => {
+            bodyTemp += chunk.toString()
+        })
+
+        req.on('end', async () => {
+            const data = JSON.parse(bodyTemp)
+            req.body = data
+        
+            await productoAActualizar.update(req.body)
+
+            res.status(200).send('Producto actualizado')
+        })
+    
+    } catch (error) {
         res.status(204).json({'message':'Producto no encontrado'})
     }
-
-    let bodyTemp = ''
-
-    req.on('data', (chunk) => {
-        bodyTemp += chunk.toString()
-    })
-
-    req.on('end', () => {
-        const data = JSON.parse(bodyTemp)
-        req.body = data
-        
-        if(data.nombre){
-            productoAActualizar.nombre = data.nombre
-        }
-        
-        if (data.tipo){
-            productoAActualizar.tipo = data.tipo
-        }
-
-        if (data.precio){
-            productoAActualizar.precio = data.precio
-        }
-
-        res.status(200).send('Producto actualizado')
-    })
 })
 
-app.patch('/usuarios/:id', (req, res) => {
+app.patch('/usuarios/:id', async (req, res) => {
     let idUsuarioAEditar = parseInt(req.params.id)
-    let usuarioAActualizar = datos.usuarios.find((usuario) => usuario.id === idUsuarioAEditar)
+    try {
+        let usuarioAActualizar = await Usuario.findByPk(idUsuarioAEditar)
 
-    if (!usuarioAActualizar) {
-        res.status(204).json({'message':'Usuario no encontrado'})
+        if (!usuarioAActualizar) {
+            return res.status(204).json({'message':'Usuario no encontrado.'})
+        }
+        let bodyTemp = ''
+
+        req.on('data', (chunk) => {
+            bodyTemp += chunk.toString()
+        })
+
+        req.on('end', async () => {
+            const data = JSON.parse(bodyTemp)
+            req.body = data
+
+            await usuarioAActualizar.update(req.body)
+
+            res.status(200).send('Usuario actualizado.')
+        })
+    } catch (error) {
+        res.status(204).json({'message':'Usuario no encontrado.'})
     }
-
-    let bodyTemp = ''
-
-    req.on('data', (chunk) => {
-        bodyTemp += chunk.toString()
-    })
-
-    req.on('end', () => {
-        const data = JSON.parse(bodyTemp)
-        req.body = data
-        
-        if(data.nombre){
-            usuarioAActualizar.nombre = data.nombre
-        }
-        
-        if (data.apellido){
-            usuarioAActualizar.telefono = data.telefono
-        }
-
-        if (data.email){
-            usuarioAActualizar.email = data.email
-        }
-
-        res.status(200).send('Usuario actualizado')
-    })
 })
 
-app.delete('/productos/:id', (req, res) => {
+app.delete('/productos/:id', async (req, res) => {
     let idProductoABorrar = parseInt(req.params.id)
-    let productoABorrar = datos.productos.find((producto) => producto.id === idProductoABorrar)
+    try {
+        let productoABorrar = await Producto.findByPk(idProductoABorrar)
 
     if (!productoABorrar){
-        res.status(204).json({'message':'Producto no encontrado'})
+        return res.status(204).json({'message':'Producto no encontrado'})
     }
 
-    let indiceProductoABorrar = datos.productos.indexOf(productoABorrar)
-    try {
-         datos.productos.splice(indiceProductoABorrar, 1)
-    res.status(200).json({'message': 'success'})
+    await productoABorrar.destroy()
+    res.status(200).json({messahe: 'Producto borrado.'})
 
     } catch (error) {
         res.status(204).json({'message': 'error'})
     }
 })
 
-app.delete('/usuarios/:id', (req, res) => {
+app.delete('/usuarios/:id', async (req, res) => {
     let idUsuarioABorrar = parseInt(req.params.id)
-    let usuarioABorrar = datos.usuarios.find((usuario) => usuario.id === idUsuarioABorrar)
+    try {
+        let usuarioABorrar = await Usuario.findByPk(idUsuarioABorrar)
 
     if (!usuarioABorrar){
-        res.status(204).json({'message':'Usuario no encontrado'})
+        return res.status(204).json({'message':'Usuario no encontrado'})
     }
 
-    let indiceUsuarioABorrar = datos.usuarios.indexOf(usuarioABorrar)
-    try {
-         datos.usuarios.splice(indiceUsuarioABorrar, 1)
-    res.status(200).json({'message': 'success'})
+    await usuarioABorrar.destroy()
+    res.status(200).json({message: 'Usuario borrado.'})
 
     } catch (error) {
         res.status(204).json({'message': 'error'})
@@ -285,6 +277,13 @@ app.delete('/usuarios/:id', (req, res) => {
 app.use((req, res) => {
     res.status(404).send('<h1>404</h1>')
 })
+
+try {
+    await db.authenticate()
+    console.log('Conexion con la DDBB establecida.')
+} catch (error) {
+    console.error('Error de conexion db', error)
+}
 
 app.listen( exposedPort, () => {
     console.log('Servidor escuchando en http://localhost:' + exposedPort)
