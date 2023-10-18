@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import express from 'express'
-
+import jwt from 'jsonwebtoken'
 import db from './db/connection.js'
 import Producto from './models/producto.js'
 import Usuario from './models/usuario.js'
@@ -14,9 +14,47 @@ const app = express()
 
 const exposedPort = 1234
 
+app.use((req, res, next) => {
+    if (req.method !== 'POST') {return next()}
+
+    if (req.headers['content-type'] !== 'application/json') {return next()}
+
+    let bodyTemp = ''
+    req.on('data', chunk => {
+        bodyTemp += chunk.toString()
+    })
+
+    req.on('end', () => {
+        const data = JSON.parse(bodyTemp)
+        req.body = data
+
+        next()
+    })
+})
+
+app.use((req, res, next) => {
+    if (req.method !== 'PATCH') {return next()}
+
+    if (req.headers['content-type'] !== 'application/json') {return next()}
+
+    let bodyTemp = ''
+    req.on('data', chunk => {
+        bodyTemp += chunk.toString()
+    })
+
+    req.on('end', () => {
+        const data = JSON.parse(bodyTemp)
+        req.body = data
+
+        next()
+    })
+})
+
 app.get('/', (req, res) => {    
     res.status(200).send(html)
 })
+
+
 
 app.get('/productos/', async (req, res) =>{
     try {
@@ -63,10 +101,10 @@ app.get('/productos/:id', async (req, res) => {
     }
 })
 
-app.get('/productos/:id/precio', (req, res) => {
+app.get('/productos/:id/precio', async (req, res) => {
     try {
         let productoId = parseInt(req.params.id)
-        let productoEncontrado = datos.productos.find((producto) => producto.id === productoId)
+        let productoEncontrado = await Producto.findByPk(productoId)
 
         if (!productoEncontrado){
             res.status(204).json({'message':'Producto no encontrado'})
@@ -139,21 +177,47 @@ app.get('/usuarios/:id/nombre', (req, res) => {
     }
 })
 
-app.post('/productos', (req, res) => {
-    try {
-        let bodyTemp = ''
+// Endpoint para la autenticación de usuarios
+app.post('/auth', async (req, res ) => {
+    //Obtención de los datos del body de la request
+    const usuarioABuscar = req.body.usuario
+    const password = req.body.password
 
-        req.on('data', (chunk) => {
-            bodyTemp += chunk.toString()
-        })
+    console.log('Usuario a buscar:', usuarioABuscar)
+    console.log('Contraseña recibida:', password)
+
+    let usuarioEncontrado = ''
+    //Se busca si el usuario existe en la DDBB
+    try {
+        usuarioEncontrado = await Usuario.findAll({where:{usuario:usuarioABuscar}})
+    } catch{
+        return res.status(400).json({message:'Usuario no encontrado.'})
+    }
+
+    if (usuarioEncontrado[0].password !== password) {
+        console.log(usuarioEncontrado)
+        return res.status(400).json({message:'Password incorrecto.'})
+    }
+
+    const sub = usuarioEncontrado.id
+    const usuario = usuarioEncontrado.usuario
+    const nivel = usuarioEncontrado.nivel
     
-        req.on('end', async () => {
-            const data = JSON.parse(bodyTemp)
-            req.body = data
+    const token = jwt.sign({
+        sub,
+        usuario,
+        nivel,
+        exp: Date.now() + 60 * 1000
+    }, process.env.SECRET_KEY)
+
+    res.status(200).json({accessToken: token})
+})
+
+app.post('/productos', async (req, res) => {
+    try {
             //datos.productos.push(req.body)
             const productoAGuardar = new Producto(req.body)
-            await productoAGuardar.save()
-        })
+            await productoAGuardar.save()        
     
         res.status(201).json({'message': 'success'})
 
@@ -162,21 +226,11 @@ app.post('/productos', (req, res) => {
     }
 })
 
-app.post('/usuarios', (req, res) => {
+app.post('/usuarios', async (req, res) => {
     try {
-        let bodyTemp = ''
-
-        req.on('data', (chunk) => {
-            bodyTemp += chunk.toString()
-        })
-    
-        req.on('end', async() => {
-            const data = JSON.parse(bodyTemp)
-            req.body = data
             //datos.usuarios.push(req.body)
             const usuarioAGuardar = new Usuario(req.body)
             await usuarioAGuardar.save()
-        })
     
         res.status(201).json({'message': 'success'})
 
@@ -192,21 +246,11 @@ app.patch('/productos/:id', async (req, res) => {
 
         if (!productoAActualizar) {
             return res.status(204).json({'message':'Producto no encontrado'})}
-
-        let bodyTemp = ''
-
-        req.on('data', (chunk) => {
-            bodyTemp += chunk.toString()
-        })
-
-        req.on('end', async () => {
-            const data = JSON.parse(bodyTemp)
-            req.body = data
         
             await productoAActualizar.update(req.body)
 
             res.status(200).send('Producto actualizado')
-        })
+        
     
     } catch (error) {
         res.status(204).json({'message':'Producto no encontrado'})
@@ -221,20 +265,11 @@ app.patch('/usuarios/:id', async (req, res) => {
         if (!usuarioAActualizar) {
             return res.status(204).json({'message':'Usuario no encontrado.'})
         }
-        let bodyTemp = ''
-
-        req.on('data', (chunk) => {
-            bodyTemp += chunk.toString()
-        })
-
-        req.on('end', async () => {
-            const data = JSON.parse(bodyTemp)
-            req.body = data
 
             await usuarioAActualizar.update(req.body)
 
             res.status(200).send('Usuario actualizado.')
-        })
+        
     } catch (error) {
         res.status(204).json({'message':'Usuario no encontrado.'})
     }
@@ -244,13 +279,12 @@ app.delete('/productos/:id', async (req, res) => {
     let idProductoABorrar = parseInt(req.params.id)
     try {
         let productoABorrar = await Producto.findByPk(idProductoABorrar)
-
-    if (!productoABorrar){
-        return res.status(204).json({'message':'Producto no encontrado'})
+        if (!productoABorrar){
+            return res.status(204).json({'message':'Producto no encontrado'})
     }
 
-    await productoABorrar.destroy()
-    res.status(200).json({messahe: 'Producto borrado.'})
+        await productoABorrar.destroy()
+        res.status(200).json({messahe: 'Producto borrado.'})
 
     } catch (error) {
         res.status(204).json({'message': 'error'})
