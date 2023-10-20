@@ -54,7 +54,42 @@ app.get('/', (req, res) => {
     res.status(200).send(html)
 })
 
+// Endpoint para la autenticación de usuarios
+app.post('/auth', async (req, res ) => {
+    
+    //Obtención de los datos del body de la request
+    const usuarioABuscar = req.body.usuario
+    const passwordRecibido = req.body.password
 
+    let usuarioEncontrado = ''
+
+    try {
+        usuarioEncontrado = await Usuario.findAll({where:{usuario:usuarioABuscar}})
+    } catch (error) {
+        return res.status(400).json({message: 'Usuario no encontrado'})
+    }
+
+    // Comprobacion del password
+    if (usuarioEncontrado[0].password !== passwordRecibido){
+        return res.status(400).json({message: 'Password incorrecto'})
+    }
+
+    // Generacion del token
+    const sub = usuarioEncontrado[0].id
+    const usuario = usuarioEncontrado[0].usuario
+    const nivel = usuarioEncontrado[0].nivel
+
+    // Firma y construccion del token
+    const token = jwt.sign({
+        sub,
+        usuario,
+        nivel,
+        exp: Date.now() + (60 * 1000)
+    }, process.env.SECRET_KEY)
+
+    res.status(200).json({ accessToken: token })
+
+})
 
 app.get('/productos/', async (req, res) =>{
     try {
@@ -177,41 +212,6 @@ app.get('/usuarios/:id/nombre', (req, res) => {
     }
 })
 
-// Endpoint para la autenticación de usuarios
-app.post('/auth', async (req, res ) => {
-    //Obtención de los datos del body de la request
-    const usuarioABuscar = req.body.usuario
-    const password = req.body.password
-
-    console.log('Usuario a buscar:', usuarioABuscar)
-    console.log('Contraseña recibida:', password)
-
-    let usuarioEncontrado = ''
-    //Se busca si el usuario existe en la DDBB
-    try {
-        usuarioEncontrado = await Usuario.findAll({where:{usuario:usuarioABuscar}})
-    } catch{
-        return res.status(400).json({message:'Usuario no encontrado.'})
-    }
-
-    if (usuarioEncontrado[0].password !== password) {
-        console.log(usuarioEncontrado)
-        return res.status(400).json({message:'Password incorrecto.'})
-    }
-
-    const sub = usuarioEncontrado.id
-    const usuario = usuarioEncontrado.usuario
-    const nivel = usuarioEncontrado.nivel
-    
-    const token = jwt.sign({
-        sub,
-        usuario,
-        nivel,
-        exp: Date.now() + 60 * 1000
-    }, process.env.SECRET_KEY)
-
-    res.status(200).json({accessToken: token})
-})
 
 app.post('/productos', async (req, res) => {
     try {
